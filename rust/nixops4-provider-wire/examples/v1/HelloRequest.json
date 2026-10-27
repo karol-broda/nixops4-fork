@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":0,"method":"hello","params":{"protocols":["resource-provider/1"],"engine":{"name":"nixops4","version":"0.2.0"},"offer":{"update":[1],"state":[1,2]}}}

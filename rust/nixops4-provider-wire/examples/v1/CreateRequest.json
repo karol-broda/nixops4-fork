@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":7,"method":"create","params":{"type":"file","inputProperties":{"name":"motd.txt","contents":"hi"},"isStateful":true,"label":"web.motd"}}

@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":0,"result":{"outcome":"done","protocol":"resource-provider/1","provider":{"name":"nixops4-resources-local","version":"0.2.0"},"capabilities":{"update":1,"state":1},"maxConcurrency":4,"sharedSession":false}}
