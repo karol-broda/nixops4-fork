@@ -7,6 +7,8 @@ pub mod method;
 pub mod outcome;
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
 
 pub use envelope::{
@@ -14,9 +16,7 @@ pub use envelope::{
 };
 pub use fault::{error, ErrorCode, FaultClass};
 pub use framing::{FramingError, Message, MessageReader, MessageWriter, MAX_LINE_BYTES};
-pub use hello::{
-    check_hello_answer, unsupported_protocol_error, Capability, HandshakeFault, Negotiated,
-};
+pub use hello::{check_hello_answer, Capability, HandshakeFault, Negotiated};
 pub use id::{IdExhausted, IdRangeError, IdSource, RequestId, TypedId};
 pub use method::{Method, MethodName};
 pub use outcome::{

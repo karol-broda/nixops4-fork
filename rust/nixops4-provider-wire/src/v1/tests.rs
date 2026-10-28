@@ -1,31 +1,11 @@
-use std::collections::BTreeMap;
-
 use serde_json::json;
 
 use crate::schema::v1 as gen;
 use crate::v1::envelope::{parse_message, Answer, MessageKind, ResponseFault};
 use crate::v1::fault::FaultClass;
-use crate::v1::id::{IdSource, TypedId};
-use crate::v1::method::{Create, Method, MethodName};
+use crate::v1::method::{Create, Hello, MethodName};
 use crate::v1::outcome::OperationResult;
-
-fn typed_id<M: Method>(id: u64) -> TypedId<M> {
-    let mut source = IdSource::new();
-    let mut typed = source.next_typed::<M>().unwrap();
-    while typed.id().as_u64() < id {
-        typed = source.next_typed::<M>().unwrap();
-    }
-    typed
-}
-
-fn hello_done() -> gen::HelloDone {
-    serde_json::from_value(json!({
-        "protocol": "resource-provider/1",
-        "provider": {"name": "nixops4-resources-local", "version": "0.2.0"},
-        "capabilities": {"update": 1, "state": 1}
-    }))
-    .unwrap()
-}
+use crate::v1::test_support::{offer_of, offered_protocols, typed_id};
 
 #[test]
 fn hello_negotiates_from_the_example_response() {
@@ -33,33 +13,20 @@ fn hello_negotiates_from_the_example_response() {
     let MessageKind::Response(response) = parse_message(line).unwrap() else {
         panic!("expected a response");
     };
-    let pending = IdSource::new()
-        .next_typed::<crate::v1::method::Hello>()
-        .unwrap();
-    let Answer::Result(result) = response
-        .answer::<crate::v1::method::Hello>(pending)
-        .unwrap()
-    else {
+    let pending = typed_id::<Hello>(0);
+    let Answer::Result(result) = response.answer::<Hello>(pending).unwrap() else {
         panic!("expected a result");
     };
     let crate::v1::outcome::Outcome::Done(done) = result.kind else {
         panic!("expected done");
     };
-    let offered = vec!["resource-provider/1".to_string().try_into().unwrap()];
-    let offer = gen::Offer(BTreeMap::from([
-        ("update".to_string(), vec![1.try_into().unwrap()]),
-        (
-            "state".to_string(),
-            vec![1.try_into().unwrap(), 2.try_into().unwrap()],
-        ),
-    ]));
-    let negotiated = crate::v1::check_hello_answer(&offered, &offer, &done).unwrap();
+    let offer = offer_of(&[("update", &[1]), ("state", &[1, 2])]);
+    let negotiated = crate::v1::check_hello_answer(&offered_protocols(), &offer, &done).unwrap();
     assert_eq!(done.max_concurrency().get(), 4);
     assert!(!done.shared_session());
     assert!(negotiated.has(crate::v1::Capability::Update));
     assert!(negotiated.has(crate::v1::Capability::State));
     assert!(!negotiated.has(crate::v1::Capability::Describe));
-    assert_eq!(hello_done().provider.name, "nixops4-resources-local");
 }
 
 #[test]

@@ -29,16 +29,6 @@ pub struct Indeterminate<D> {
     pub raw_outcome: Option<String>,
 }
 
-impl<D> Outcome<D> {
-    pub fn reject(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Outcome::Rejected(Rejected {
-            code: code.into(),
-            retryable: None,
-            message: Some(message.into()),
-        })
-    }
-}
-
 impl Rejected {
     pub fn retryable(&self) -> bool {
         self.retryable.unwrap_or(false)

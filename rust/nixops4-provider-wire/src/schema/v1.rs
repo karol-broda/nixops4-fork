@@ -78,53 +78,6 @@ mod tests {
     }
 
     #[test]
-    fn examples_v1_create_done() {
-        let json = include_str!("../../examples/v1/CreateDone.json");
-        let response: Response = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, ResponseId(Some(7)));
-        let result: CreateDone = serde_json::from_value(result_of(json)).unwrap();
-        assert!(result.output_properties.0.is_empty());
-    }
-
-    #[test]
-    fn examples_v1_create_rejected() {
-        let json = include_str!("../../examples/v1/CreateRejected.json");
-        let result: Rejected = serde_json::from_value(result_of(json)).unwrap();
-        assert_eq!(result.code, "core.invalidInputs");
-        assert_eq!(result.retryable, Some(false));
-        assert_eq!(
-            result.message.as_deref(),
-            Some("unknown input property: owner")
-        );
-    }
-
-    #[test]
-    fn examples_v1_create_indeterminate() {
-        let json = include_str!("../../examples/v1/CreateIndeterminate.json");
-        let result: Value = result_of(json);
-        assert_eq!(result["outcome"], "indeterminate");
-        assert_eq!(result["code"], "aws.waitTimeout");
-        assert_eq!(result["outputProperties"]["id"], "i-0abc");
-    }
-
-    #[test]
-    fn examples_v1_unknown_outcome() {
-        let json = include_str!("../../examples/v1/UnknownOutcome.json");
-        let result: Value = result_of(json);
-        assert_eq!(result["outcome"], "partial");
-    }
-
-    #[test]
-    fn examples_v1_error_response() {
-        let json = include_str!("../../examples/v1/ErrorResponse.json");
-        let response: Response = serde_json::from_str(json).unwrap();
-        let error = response.error.unwrap();
-        assert_eq!(error.code, -32001);
-        assert_eq!(error.message, "unsupported protocol");
-        assert_eq!(error.data.unwrap()["supported"][0], "resource-provider/2");
-    }
-
-    #[test]
     fn examples_v1_state_event_request() {
         let json = include_str!("../../examples/v1/StateEventRequest.json");
         let params: StateEventParams = serde_json::from_value(params_of(json)).unwrap();

@@ -9,12 +9,16 @@ use crate::v1::method::Method;
 
 pub const MAX_LINE_BYTES: usize = 64 * 1024 * 1024;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum FramingError {
-    Encode(serde_json::Error),
-    DecodeUtf8(std::str::Utf8Error),
+    #[error("could not encode message: {0}")]
+    Encode(#[source] serde_json::Error),
+    #[error("message line is not UTF-8: {0}")]
+    DecodeUtf8(#[source] std::str::Utf8Error),
+    #[error("message line exceeds {limit} bytes")]
     LineTooLong { limit: usize },
-    Io(std::io::Error),
+    #[error("message I/O failed: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl From<serde_json::Error> for FramingError {
@@ -22,27 +26,6 @@ impl From<serde_json::Error> for FramingError {
         FramingError::Encode(e)
     }
 }
-
-impl From<std::io::Error> for FramingError {
-    fn from(e: std::io::Error) -> Self {
-        FramingError::Io(e)
-    }
-}
-
-impl std::fmt::Display for FramingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FramingError::Encode(e) => write!(f, "could not encode message: {e}"),
-            FramingError::DecodeUtf8(e) => write!(f, "message line is not UTF-8: {e}"),
-            FramingError::LineTooLong { limit } => {
-                write!(f, "message line exceeds {limit} bytes")
-            }
-            FramingError::Io(e) => write!(f, "message I/O failed: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for FramingError {}
 
 pub struct MessageWriter<W: Write> {
     inner: W,
@@ -106,10 +89,6 @@ impl<R: BufRead> MessageReader<R> {
             }
         }
     }
-
-    pub fn into_inner(self) -> R {
-        self.inner
-    }
 }
 
 #[derive(Debug)]
@@ -118,10 +97,6 @@ pub struct Message<'a> {
 }
 
 impl<'a> Message<'a> {
-    pub fn as_str(&self) -> &'a str {
-        self.line
-    }
-
     pub fn parse<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_str(self.line)
     }
@@ -161,17 +136,17 @@ fn read_bounded_line<R: BufRead>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema::v1::{CreateParams, InputProperties, LogNotificationParams, ResourceType};
     use crate::v1::method::Create;
+    use serde_json::Value;
 
-    fn create_params() -> crate::schema::v1::CreateParams {
-        crate::schema::v1::CreateParams {
-            type_: crate::schema::v1::ResourceType("file".to_string()),
-            input_properties: crate::schema::v1::InputProperties(serde_json::Map::from_iter(vec![
-                (
-                    "contents".to_string(),
-                    serde_json::Value::String("two\nlines".to_string()),
-                ),
-            ])),
+    fn create_params() -> CreateParams {
+        CreateParams {
+            type_: ResourceType("file".to_string()),
+            input_properties: InputProperties(serde_json::Map::from_iter([(
+                "contents".to_string(),
+                Value::String("two\nlines".to_string()),
+            )])),
             is_stateful: true,
             label: None,
         }
@@ -180,28 +155,13 @@ mod tests {
     #[test]
     fn frames_round_trip_through_writer_and_reader() {
         let mut writer = MessageWriter::new(Vec::new());
-        let id = RequestId::try_from_u64(7).unwrap();
-        writer.send::<Create>(id, &create_params()).unwrap();
-        let bytes = writer.into_inner();
-
-        assert!(!bytes[..bytes.len() - 1].contains(&b'\n'));
-
-        let mut reader = MessageReader::new(bytes.as_slice());
-        let message = reader.next().unwrap().unwrap();
-        let MessageKind::Request(request) = message.parse_message().unwrap() else {
-            panic!("expected a request");
-        };
-        assert_eq!(request.method, "create");
-        assert!(reader.next().unwrap().is_none());
-    }
-
-    #[test]
-    fn notifications_round_trip() {
-        let mut writer = MessageWriter::new(Vec::new());
+        writer
+            .send::<Create>(RequestId::try_from_u64(7).unwrap(), &create_params())
+            .unwrap();
         writer
             .notify(
                 "log",
-                &crate::schema::v1::LogNotificationParams {
+                &LogNotificationParams {
                     request_id: None,
                     level: None,
                     message: "hello".to_string(),
@@ -210,12 +170,22 @@ mod tests {
             )
             .unwrap();
         let bytes = writer.into_inner();
+
+        let newlines = bytes.iter().filter(|byte| **byte == b'\n').count();
+        assert_eq!(newlines, 2, "each frame ends with exactly one newline");
+
         let mut reader = MessageReader::new(bytes.as_slice());
         let message = reader.next().unwrap().unwrap();
-        assert!(matches!(
-            message.parse_message().unwrap(),
-            MessageKind::Notification(_)
-        ));
+        let MessageKind::Request(request) = message.parse_message().unwrap() else {
+            panic!("expected a request");
+        };
+        assert_eq!(request.method, "create");
+        let message = reader.next().unwrap().unwrap();
+        let MessageKind::Notification(notification) = message.parse_message().unwrap() else {
+            panic!("expected a notification");
+        };
+        assert_eq!(notification.method, "log");
+        assert!(reader.next().unwrap().is_none());
     }
 
     #[test]

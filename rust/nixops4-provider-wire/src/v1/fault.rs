@@ -46,20 +46,6 @@ impl From<ErrorCode> for i64 {
     }
 }
 
-impl ErrorCode {
-    pub fn name(self) -> &'static str {
-        match self {
-            ErrorCode::ParseError => "parseError",
-            ErrorCode::InvalidRequest => "invalidRequest",
-            ErrorCode::MethodNotFound => "methodNotFound",
-            ErrorCode::InvalidParams => "invalidParams",
-            ErrorCode::UnsupportedProtocol => "unsupportedProtocol",
-            ErrorCode::NotInitialized => "notInitialized",
-            ErrorCode::Other(_) => "other",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FaultClass {
     TreatedAsRejected,

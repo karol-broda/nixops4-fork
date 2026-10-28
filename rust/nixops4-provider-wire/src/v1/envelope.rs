@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::schema::v1 as gen;
@@ -26,22 +27,13 @@ impl AnyRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ParamsError {
+    #[error("unknown method: {0}")]
     UnknownMethod(String),
-    MalformedParams(serde_json::Error),
+    #[error("malformed params: {0}")]
+    MalformedParams(#[source] serde_json::Error),
 }
-
-impl std::fmt::Display for ParamsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParamsError::UnknownMethod(method) => write!(f, "unknown method: {method}"),
-            ParamsError::MalformedParams(e) => write!(f, "malformed params: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for ParamsError {}
 
 impl MethodName {
     fn decode_params(self, value: Value) -> Result<AnyRequest, serde_json::Error> {
@@ -84,32 +76,17 @@ pub enum Answer<D> {
     Fault(gen::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ResponseFault {
+    #[error("response id {got:?} does not match the pending request")]
     IdMismatch { got: Option<i64> },
+    #[error("response has neither result nor error")]
     NoResultOrError,
+    #[error("response has both result and error")]
     BothResultAndError,
-    MalformedResult(serde_json::Error),
+    #[error("malformed result: {0}")]
+    MalformedResult(#[source] serde_json::Error),
 }
-
-impl std::fmt::Display for ResponseFault {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResponseFault::IdMismatch { got } => {
-                write!(f, "response id {got:?} does not match the pending request")
-            }
-            ResponseFault::NoResultOrError => {
-                write!(f, "response has neither result nor error")
-            }
-            ResponseFault::BothResultAndError => {
-                write!(f, "response has both result and error")
-            }
-            ResponseFault::MalformedResult(e) => write!(f, "malformed result: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for ResponseFault {}
 
 impl gen::Response {
     pub fn answer<M: Method>(self, pending: TypedId<M>) -> Result<Answer<M::Done>, ResponseFault> {
@@ -137,31 +114,26 @@ pub enum MessageKind {
     Notification(gen::Notification),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum MessageParseError {
-    NotJson(serde_json::Error),
+    #[error("not JSON: {0}")]
+    NotJson(#[source] serde_json::Error),
+    #[error("not a JSON-RPC message")]
     NotJsonRpc,
+    #[error("batches are not part of the protocol")]
     Batch,
-    MalformedMessage(serde_json::Error),
+    #[error("malformed message: {0}")]
+    MalformedMessage(#[source] serde_json::Error),
 }
-
-impl std::fmt::Display for MessageParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MessageParseError::NotJson(e) => write!(f, "not JSON: {e}"),
-            MessageParseError::NotJsonRpc => write!(f, "not a JSON-RPC message"),
-            MessageParseError::Batch => write!(f, "batches are not part of the protocol"),
-            MessageParseError::MalformedMessage(e) => write!(f, "malformed message: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for MessageParseError {}
 
 enum MessageTag {
     Request,
     Notification,
     Response,
+}
+
+fn decode_envelope<T: DeserializeOwned>(value: Value) -> Result<T, MessageParseError> {
+    serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)
 }
 
 pub fn parse_message(line: &str) -> Result<MessageKind, MessageParseError> {
@@ -185,14 +157,8 @@ pub fn parse_message(line: &str) -> Result<MessageKind, MessageParseError> {
     };
     let value = Value::Object(object);
     Ok(match tag {
-        MessageTag::Request => MessageKind::Request(
-            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
-        ),
-        MessageTag::Notification => MessageKind::Notification(
-            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
-        ),
-        MessageTag::Response => MessageKind::Response(
-            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
-        ),
+        MessageTag::Request => MessageKind::Request(decode_envelope(value)?),
+        MessageTag::Notification => MessageKind::Notification(decode_envelope(value)?),
+        MessageTag::Response => MessageKind::Response(decode_envelope(value)?),
     })
 }

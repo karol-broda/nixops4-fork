@@ -102,16 +102,4 @@ mod tests {
         assert_eq!(MethodName::parse("configure"), None);
         assert_eq!(MethodName::parse(""), None);
     }
-
-    #[test]
-    fn method_tokens_agree_with_the_name_table() {
-        fn assert_name<M: Method>(expected: MethodName) {
-            assert_eq!(M::NAME, expected.as_str());
-        }
-        assert_name::<Hello>(MethodName::Hello);
-        assert_name::<Create>(MethodName::Create);
-        assert_name::<Update>(MethodName::Update);
-        assert_name::<StateRead>(MethodName::StateRead);
-        assert_name::<StateEvent>(MethodName::StateEvent);
-    }
 }

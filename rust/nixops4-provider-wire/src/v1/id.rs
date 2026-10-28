@@ -40,29 +40,15 @@ impl RequestId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("request id {value} is outside 0..={MAX_ID}")]
 pub struct IdRangeError {
     pub value: i128,
 }
 
-impl std::fmt::Display for IdRangeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "request id {} is outside 0..={MAX_ID}", self.value)
-    }
-}
-
-impl std::error::Error for IdRangeError {}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("request ids are exhausted for this session")]
 pub struct IdExhausted;
-
-impl std::fmt::Display for IdExhausted {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "request ids are exhausted for this session")
-    }
-}
-
-impl std::error::Error for IdExhausted {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdSource {
