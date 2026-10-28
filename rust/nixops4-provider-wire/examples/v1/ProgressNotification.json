@@ -1,1 +1,9 @@
-{"jsonrpc":"2.0","method":"progress","params":{"requestId":7,"message":"waiting for volume","fraction":0.3}}
+{
+  "jsonrpc": "2.0",
+  "method": "progress",
+  "params": {
+    "requestId": 7,
+    "message": "waiting for volume",
+    "fraction": 0.3
+  }
+}

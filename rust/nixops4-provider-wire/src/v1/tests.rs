@@ -55,7 +55,7 @@ fn hello_negotiates_from_the_example_response() {
     ]));
     let negotiated = crate::v1::check_hello_answer(&offered, &offer, &done).unwrap();
     assert_eq!(done.max_concurrency().get(), 4);
-    assert!(done.shared_session() == false);
+    assert!(!done.shared_session());
     assert!(negotiated.has(crate::v1::Capability::Update));
     assert!(negotiated.has(crate::v1::Capability::State));
     assert!(!negotiated.has(crate::v1::Capability::Describe));

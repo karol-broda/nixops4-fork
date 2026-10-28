@@ -1,1 +1,9 @@
-{"jsonrpc":"2.0","id":7,"result":{"outcome":"partial","code":"core.partial","message":"unknown outcome values mean indeterminate"}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "outcome": "partial",
+    "code": "core.partial",
+    "message": "unknown outcome values mean indeterminate"
+  }
+}

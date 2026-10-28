@@ -142,6 +142,7 @@ pub enum MessageParseError {
     NotJson(serde_json::Error),
     NotJsonRpc,
     Batch,
+    MalformedMessage(serde_json::Error),
 }
 
 impl std::fmt::Display for MessageParseError {
@@ -150,6 +151,7 @@ impl std::fmt::Display for MessageParseError {
             MessageParseError::NotJson(e) => write!(f, "not JSON: {e}"),
             MessageParseError::NotJsonRpc => write!(f, "not a JSON-RPC message"),
             MessageParseError::Batch => write!(f, "batches are not part of the protocol"),
+            MessageParseError::MalformedMessage(e) => write!(f, "malformed message: {e}"),
         }
     }
 }
@@ -183,14 +185,14 @@ pub fn parse_message(line: &str) -> Result<MessageKind, MessageParseError> {
     };
     let value = Value::Object(object);
     Ok(match tag {
-        MessageTag::Request => {
-            MessageKind::Request(serde_json::from_value(value).map_err(MessageParseError::NotJson)?)
-        }
+        MessageTag::Request => MessageKind::Request(
+            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
+        ),
         MessageTag::Notification => MessageKind::Notification(
-            serde_json::from_value(value).map_err(MessageParseError::NotJson)?,
+            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
         ),
         MessageTag::Response => MessageKind::Response(
-            serde_json::from_value(value).map_err(MessageParseError::NotJson)?,
+            serde_json::from_value(value).map_err(MessageParseError::MalformedMessage)?,
         ),
     })
 }

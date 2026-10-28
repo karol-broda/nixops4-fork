@@ -1,1 +1,13 @@
-{"jsonrpc":"2.0","id":7,"error":{"code":-32001,"message":"unsupported protocol","data":{"supported":["resource-provider/2"]}}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "error": {
+    "code": -32001,
+    "message": "unsupported protocol",
+    "data": {
+      "supported": [
+        "resource-provider/2"
+      ]
+    }
+  }
+}

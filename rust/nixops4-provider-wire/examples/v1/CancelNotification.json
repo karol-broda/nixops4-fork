@@ -1,1 +1,7 @@
-{"jsonrpc":"2.0","method":"cancel","params":{"requestId":7}}
+{
+  "jsonrpc": "2.0",
+  "method": "cancel",
+  "params": {
+    "requestId": 7
+  }
+}

@@ -1,1 +1,12 @@
-{"jsonrpc":"2.0","id":7,"result":{"outcome":"indeterminate","code":"aws.waitTimeout","message":"Instance created, did not reach running","outputProperties":{"id":"i-0abc"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "outcome": "indeterminate",
+    "code": "aws.waitTimeout",
+    "message": "Instance created, did not reach running",
+    "outputProperties": {
+      "id": "i-0abc"
+    }
+  }
+}

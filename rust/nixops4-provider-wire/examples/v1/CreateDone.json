@@ -1,1 +1,8 @@
-{"jsonrpc":"2.0","id":7,"result":{"outcome":"done","outputProperties":{}}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "outcome": "done",
+    "outputProperties": {}
+  }
+}

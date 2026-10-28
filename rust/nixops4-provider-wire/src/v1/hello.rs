@@ -41,13 +41,6 @@ impl Capability {
             .copied()
             .find(|capability| capability.name() == name)
     }
-
-    pub fn accepted_versions(self) -> &'static [u8] {
-        match self {
-            Capability::State => &[1, 2],
-            _ => &[1],
-        }
-    }
 }
 
 #[derive(Debug)]

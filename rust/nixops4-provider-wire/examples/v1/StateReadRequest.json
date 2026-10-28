@@ -1,1 +1,13 @@
-{"jsonrpc":"2.0","id":9,"method":"stateRead","params":{"resource":{"type":"state_file","inputProperties":{"name":"state.json"}}}}
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "stateRead",
+  "params": {
+    "resource": {
+      "type": "state_file",
+      "inputProperties": {
+        "name": "state.json"
+      }
+    }
+  }
+}

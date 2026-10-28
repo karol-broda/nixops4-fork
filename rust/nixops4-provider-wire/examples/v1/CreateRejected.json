@@ -1,1 +1,10 @@
-{"jsonrpc":"2.0","id":7,"result":{"outcome":"rejected","code":"core.invalidInputs","retryable":false,"message":"unknown input property: owner"}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "outcome": "rejected",
+    "code": "core.invalidInputs",
+    "retryable": false,
+    "message": "unknown input property: owner"
+  }
+}
