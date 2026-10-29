@@ -205,6 +205,18 @@ mod tests {
     }
 
     #[test]
+    fn unterminated_final_line_is_still_delivered() {
+        let line = br#"{"jsonrpc":"2.0","id":7,"method":"create","params":{}}"#;
+        let mut reader = MessageReader::new(std::io::Cursor::new(line.to_vec()));
+        let message = reader.next().unwrap().unwrap();
+        assert!(matches!(
+            message.parse_message().unwrap(),
+            MessageKind::Request(_)
+        ));
+        assert!(reader.next().unwrap().is_none());
+    }
+
+    #[test]
     fn invalid_utf8_is_reported() {
         let mut reader = MessageReader::new(std::io::Cursor::new(vec![0xff, b'\n']));
         assert!(matches!(

@@ -132,6 +132,23 @@ mod tests {
     }
 
     #[test]
+    fn hello_answers_that_violate_the_schema_are_rejected() {
+        let bad_protocol: Result<HelloDone, _> = serde_json::from_value(serde_json::json!({
+            "protocol": "provider/1",
+            "provider": {"name": "p", "version": "0"},
+            "capabilities": {}
+        }));
+        assert!(bad_protocol.is_err());
+
+        let zero_version: Result<HelloDone, _> = serde_json::from_value(serde_json::json!({
+            "protocol": "resource-provider/1",
+            "provider": {"name": "p", "version": "0"},
+            "capabilities": {"state": 0}
+        }));
+        assert!(zero_version.is_err());
+    }
+
+    #[test]
     fn generated_types_never_deny_unknown_fields() {
         let source =
             std::fs::read_to_string(concat!(env!("OUT_DIR"), "/generated/schema/resource/v1.rs"))

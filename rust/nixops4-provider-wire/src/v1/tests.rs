@@ -70,6 +70,143 @@ fn unknown_methods_are_distinguishable_from_malformed_params() {
         request.decode_params().unwrap_err(),
         crate::v1::ParamsError::MalformedParams(_)
     ));
+
+    let request: gen::Request = serde_json::from_value(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "create",
+        "params": ["file", {}],
+    }))
+    .unwrap();
+    assert!(matches!(
+        request.decode_params().unwrap_err(),
+        crate::v1::ParamsError::MalformedParams(_)
+    ));
+}
+
+#[test]
+fn v0_provider_lines_are_not_json_rpc() {
+    for line in [
+        r#"{"errorResponse":{"message":"unknown request type"}}"#,
+        r#"{"createResourceResponse":{"outputProperties":{}}}"#,
+    ] {
+        match parse_message(line) {
+            Err(crate::v1::MessageParseError::NotJsonRpc) => {}
+            other => panic!("expected NotJsonRpc for {line}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn torn_empty_and_garbage_padded_lines_are_not_json() {
+    for line in [
+        r#"{"jsonrpc":"2.0","id":1,"method":"#,
+        r#"{"jsonrpc":"2.0","id":1} trailing output"#,
+        "",
+    ] {
+        match parse_message(line) {
+            Err(crate::v1::MessageParseError::NotJson(_)) => {}
+            other => panic!("expected NotJson for {line:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn wrong_jsonrpc_versions_are_malformed() {
+    let line = r#"{"jsonrpc":"1.1","id":1,"method":"hello","params":{}}"#;
+    assert!(matches!(
+        parse_message(line).unwrap_err(),
+        crate::v1::MessageParseError::MalformedMessage(_)
+    ));
+}
+
+#[test]
+fn null_request_ids_are_malformed() {
+    let line = r#"{"jsonrpc":"2.0","id":null,"method":"create","params":{}}"#;
+    assert!(matches!(
+        parse_message(line).unwrap_err(),
+        crate::v1::MessageParseError::MalformedMessage(_)
+    ));
+}
+
+#[test]
+fn errors_missing_their_message_are_malformed() {
+    let line = r#"{"jsonrpc":"2.0","id":7,"error":{"code":-32601}}"#;
+    assert!(matches!(
+        parse_message(line).unwrap_err(),
+        crate::v1::MessageParseError::MalformedMessage(_)
+    ));
+}
+
+#[test]
+fn null_error_ids_are_id_mismatches() {
+    let line = r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}"#;
+    let MessageKind::Response(response) = parse_message(line).unwrap() else {
+        panic!("expected a response");
+    };
+    match response.answer::<Create>(typed_id::<Create>(0)) {
+        Err(ResponseFault::IdMismatch { got }) => assert_eq!(got, None),
+        other => panic!("expected IdMismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn negative_response_ids_are_id_mismatches() {
+    let line = r#"{"jsonrpc":"2.0","id":-3,"result":{"outcome":"done","outputProperties":{}}}"#;
+    let MessageKind::Response(response) = parse_message(line).unwrap() else {
+        panic!("expected a response");
+    };
+    match response.answer::<Create>(typed_id::<Create>(0)) {
+        Err(ResponseFault::IdMismatch { got }) => assert_eq!(got, Some(-3)),
+        other => panic!("expected IdMismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn responses_with_both_result_and_error_are_faults() {
+    let line = r#"{"jsonrpc":"2.0","id":7,"result":{"outcome":"done","outputProperties":{}},"error":{"code":-32001,"message":"unsupported protocol"}}"#;
+    let MessageKind::Response(response) = parse_message(line).unwrap() else {
+        panic!("expected a response");
+    };
+    match response.answer::<Create>(typed_id::<Create>(7)) {
+        Err(ResponseFault::BothResultAndError) => {}
+        other => panic!("expected BothResultAndError, got {other:?}"),
+    }
+}
+
+#[test]
+fn done_results_missing_their_payload_are_malformed() {
+    let line = r#"{"jsonrpc":"2.0","id":7,"result":{"outcome":"done"}}"#;
+    let MessageKind::Response(response) = parse_message(line).unwrap() else {
+        panic!("expected a response");
+    };
+    match response.answer::<Create>(typed_id::<Create>(7)) {
+        Err(ResponseFault::MalformedResult(_)) => {}
+        other => panic!("expected MalformedResult, got {other:?}"),
+    }
+}
+
+#[test]
+fn non_object_results_are_malformed() {
+    for result in [r#"[{"outputProperties":{}}]"#, r#""ok""#] {
+        let line = format!(r#"{{"jsonrpc":"2.0","id":7,"result":{result}}}"#);
+        let MessageKind::Response(response) = parse_message(&line).unwrap() else {
+            panic!("expected a response");
+        };
+        match response.answer::<Create>(typed_id::<Create>(7)) {
+            Err(ResponseFault::MalformedResult(_)) => {}
+            other => panic!("expected MalformedResult for {line}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn unknown_notification_methods_are_tolerated() {
+    let line = r#"{"jsonrpc":"2.0","method":"trace","params":{"depth":2}}"#;
+    let MessageKind::Notification(notification) = parse_message(line).unwrap() else {
+        panic!("expected a notification");
+    };
+    assert_eq!(notification.method, "trace");
 }
 
 #[test]
