@@ -1107,10 +1107,12 @@ version = "0.1.0"
 dependencies = [
  "json-patch",
  "prettyplease",
+ "regress",
  "schemars",
  "serde",
  "serde_json",
  "syn",
+ "thiserror 1.0.69",
  "typify",
 ]
 

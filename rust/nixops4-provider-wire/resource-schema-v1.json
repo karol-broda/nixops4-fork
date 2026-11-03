@@ -1,0 +1,553 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nixops.dev/manual/development/schema/resource-schema-v1.json",
+  "title": "NixOps4 Resource Provider Protocol Schema v1",
+  "description": "Protocol version 1 (resource-provider/1) between the NixOps4 engine and resource provider processes: JSON-RPC 2.0 messages, one compact UTF-8 JSON object per line; receivers accept lines of at least 64 MiB. Every operation response carries a result object tagged by outcome: done carries the operation's done payload (HelloDone, CreateDone, UpdateDone, StateReadDone, StateEventDone), rejected carries code/retryable?/message? and did not take effect, indeterminate carries code/message? plus whatever of the done payload the provider knows. An outcome value not named here is treated as indeterminate; a missing code is core.unspecified. Any result may carry warnings: [{code, message}]. Receivers ignore unknown protocol fields; data values (inputProperties, outputProperties, state, fields) are preserved exactly and governed by the resource type, not the protocol.",
+  "definitions": {
+    "Patch": {
+      "description": "An RFC 6902 JSON Patch document. See <https://tools.ietf.org/html/rfc6902>, <https://json.schemastore.org/json-patch.json>",
+      "$ref": "https://json.schemastore.org/json-patch.json#",
+      "x-rust-type": {
+        "crate": "json_patch",
+        "version": "4.0.0",
+        "path": "json_patch::Patch"
+      }
+    },
+    "Id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "title": "Request id",
+      "description": "An integer in 0..=2^53-1, so every JSON library represents it exactly. Ids strictly increase and are never reused within a session; each direction has its own id space."
+    },
+    "ResponseId": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "title": "Response id",
+      "description": "The id of the request this response answers, or null when the fault is not tied to a request."
+    },
+    "jsonrpc": {
+      "type": "string",
+      "enum": [
+        "2.0"
+      ],
+      "title": "JSON-RPC version",
+      "description": "Always \"2.0\"."
+    },
+    "Request": {
+      "type": "object",
+      "title": "Request",
+      "description": "A JSON-RPC 2.0 request: expects exactly one response with the same id.",
+      "properties": {
+        "jsonrpc": {
+          "$ref": "#/definitions/jsonrpc"
+        },
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "method": {
+          "type": "string",
+          "description": "The requested operation: hello, create, update (update@1), stateRead or stateEvent (state@1), or a capability-defined method."
+        },
+        "params": {
+          "description": "The operation's parameters; the shape is defined per method by the *Params definitions."
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "method"
+      ]
+    },
+    "Response": {
+      "type": "object",
+      "title": "Response",
+      "description": "A JSON-RPC 2.0 response: exactly one of result or error. A result says the request was understood; outcome says what happened. An error is a protocol fault; an error with id null or an unknown id is a session fault.",
+      "properties": {
+        "jsonrpc": {
+          "$ref": "#/definitions/jsonrpc"
+        },
+        "id": {
+          "$ref": "#/definitions/ResponseId"
+        },
+        "result": {
+          "description": "An object tagged by outcome; see the schema description."
+        },
+        "error": {
+          "$ref": "#/definitions/Error"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id"
+      ]
+    },
+    "Notification": {
+      "type": "object",
+      "title": "Notification",
+      "description": "A JSON-RPC 2.0 notification: no id, no response expected, in either direction. Unknown notifications are ignored and logged at debug level.",
+      "properties": {
+        "jsonrpc": {
+          "$ref": "#/definitions/jsonrpc"
+        },
+        "method": {
+          "type": "string",
+          "description": "One of the notification methods: log, progress (progress@1), cancel (cancel@1)."
+        },
+        "params": {
+          "description": "The notification's parameters; the shape is defined per method."
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method"
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "title": "Error",
+      "description": "A JSON-RPC 2.0 error object: the request could not be processed, a protocol fault rather than an operation outcome. The codes -32700, -32600, -32601 and -32602 must not be sent for a request that has started executing. Reserved here: -32001 unsupported protocol, -32002 not initialized.",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "description": "A JSON-RPC error code."
+        },
+        "message": {
+          "type": "string",
+          "description": "A short description of the fault."
+        },
+        "data": {
+          "description": "Additional fault data; for -32001, {\"supported\": [...]} names the protocol versions the provider speaks."
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "ProtocolId": {
+      "type": "string",
+      "pattern": "^resource-provider/[0-9]+$",
+      "title": "Protocol id",
+      "description": "A protocol version identifier, for example resource-provider/1. A protocol version covers the envelope, the core operations and the compatibility rules."
+    },
+    "EngineInfo": {
+      "type": "object",
+      "title": "Engine info",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "ProviderInfo": {
+      "type": "object",
+      "title": "Provider info",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "Offer": {
+      "type": "object",
+      "title": "Capability offer",
+      "description": "Per optional capability, the versions the engine supports. Capability names in v1: update, state, progress, cancel, describe.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minItems": 1
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "title": "Capabilities",
+      "description": "The provider's answer to the offer: at most one version per capability, chosen from the versions offered. Capabilities not in the answer do not exist for this session. Unknown capability names are ignored with a warning.",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "HelloParams": {
+      "type": "object",
+      "title": "hello params",
+      "description": "The engine's first message: which protocol versions it speaks, and which capability versions it supports. The provider picks one protocol version and at most one version per capability.",
+      "properties": {
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProtocolId"
+          },
+          "minItems": 1
+        },
+        "engine": {
+          "$ref": "#/definitions/EngineInfo"
+        },
+        "offer": {
+          "$ref": "#/definitions/Offer"
+        }
+      },
+      "required": [
+        "protocols",
+        "engine",
+        "offer"
+      ]
+    },
+    "HelloDone": {
+      "type": "object",
+      "title": "hello done payload",
+      "description": "The provider's answer to hello, as the payload of a done result. The shape of hello and its answer is the same in every protocol version; only fields may be added.",
+      "properties": {
+        "protocol": {
+          "$ref": "#/definitions/ProtocolId"
+        },
+        "provider": {
+          "$ref": "#/definitions/ProviderInfo"
+        },
+        "capabilities": {
+          "$ref": "#/definitions/Capabilities"
+        },
+        "maxConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bounds the requests the engine has in flight on this process. Default 1."
+        },
+        "sharedSession": {
+          "type": "boolean",
+          "description": "Whether the process may serve more than one resource. Default false."
+        }
+      },
+      "required": [
+        "protocol",
+        "provider",
+        "capabilities"
+      ]
+    },
+    "resourceType": {
+      "type": "string",
+      "title": "Provider-defined resource type",
+      "description": "The type of the resource to create. The resource provider uses this to distinguish between different types of resources that it manages. Furthermore, the type will be shown to the user. The resource type is chosen by the deployment expression, but must be one of the types that the resource provider supports. The resource provider must not proceed if the type is not supported."
+    },
+    "inputProperties": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Input properties",
+      "description": "Arbitrary fields that make up the input properties. The set of valid fields is determined by the resource provider implementation. If any unrecognized fields are present, the resource provider must reject the operation with core.invalidInputs."
+    },
+    "outputProperties": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Output properties",
+      "description": "Arbitrary fields that make up the output properties. The set of fields is determined by the resource provider implementation. Unknown fields will be ignored by the Nix expressions."
+    },
+    "ExtantResource": {
+      "type": "object",
+      "title": "Extant resource",
+      "description": "A resource as recorded in the state, passed back to its provider (state@1 payloads).",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/resourceType"
+        },
+        "inputProperties": {
+          "$ref": "#/definitions/inputProperties"
+        },
+        "outputProperties": {
+          "$ref": "#/definitions/outputProperties"
+        }
+      },
+      "required": [
+        "type",
+        "inputProperties"
+      ]
+    },
+    "PreviousResource": {
+      "type": "object",
+      "title": "Previous resource",
+      "description": "The previous state of a resource being updated, without its type (which is a top-level parameter of update).",
+      "properties": {
+        "inputProperties": {
+          "$ref": "#/definitions/inputProperties"
+        },
+        "outputProperties": {
+          "$ref": "#/definitions/outputProperties"
+        }
+      },
+      "required": [
+        "inputProperties",
+        "outputProperties"
+      ]
+    },
+    "CreateParams": {
+      "type": "object",
+      "title": "create params",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/resourceType"
+        },
+        "inputProperties": {
+          "$ref": "#/definitions/inputProperties"
+        },
+        "isStateful": {
+          "type": "boolean",
+          "description": "Whether the resource is declared to be stateful. If false, the response will not be persisted. If persistence is required, the resource provider must reject the operation."
+        },
+        "label": {
+          "type": "string",
+          "description": "A human-readable address of the resource, for logs only; never stable."
+        }
+      },
+      "required": [
+        "type",
+        "inputProperties",
+        "isStateful"
+      ]
+    },
+    "CreateDone": {
+      "type": "object",
+      "title": "create done payload",
+      "description": "The done payload of create; on an indeterminate result the same fields may appear partially.",
+      "properties": {
+        "outputProperties": {
+          "$ref": "#/definitions/outputProperties",
+          "description": "The properties of the created resource. It is not recommended to return verbatim inputProperties here, because that invites a dependency on the provider for information that is already known, deteriorating the user experience; concurrency, completeness of plan, unnecessary strictness, etc."
+        }
+      },
+      "required": [
+        "outputProperties"
+      ]
+    },
+    "UpdateParams": {
+      "type": "object",
+      "title": "update params",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/resourceType"
+        },
+        "inputProperties": {
+          "$ref": "#/definitions/inputProperties"
+        },
+        "previous": {
+          "$ref": "#/definitions/PreviousResource"
+        },
+        "label": {
+          "type": "string",
+          "description": "A human-readable address of the resource, for logs only; never stable."
+        }
+      },
+      "required": [
+        "type",
+        "inputProperties",
+        "previous"
+      ]
+    },
+    "UpdateDone": {
+      "type": "object",
+      "title": "update done payload",
+      "description": "The done payload of update; on an indeterminate result the same fields may appear partially.",
+      "properties": {
+        "outputProperties": {
+          "$ref": "#/definitions/outputProperties"
+        }
+      },
+      "required": [
+        "outputProperties"
+      ]
+    },
+    "StateReadParams": {
+      "type": "object",
+      "title": "stateRead params",
+      "description": "State storage read (state@1); payload unchanged from protocol version 0.",
+      "properties": {
+        "resource": {
+          "$ref": "#/definitions/ExtantResource"
+        }
+      },
+      "required": [
+        "resource"
+      ]
+    },
+    "StateReadDone": {
+      "type": "object",
+      "title": "stateRead done payload",
+      "description": "The done payload of stateRead; on an indeterminate result the same fields may appear partially.",
+      "properties": {
+        "state": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "State",
+          "description": "The state of all the managed resources, as built by replaying the appended patches. This method is only implemented by resources that function as a state storage."
+        }
+      },
+      "required": [
+        "state"
+      ]
+    },
+    "StateEventParams": {
+      "type": "object",
+      "title": "stateEvent params",
+      "description": "State storage append (state@1); payload unchanged from protocol version 0.",
+      "properties": {
+        "resource": {
+          "$ref": "#/definitions/ExtantResource"
+        },
+        "event": {
+          "type": "string",
+          "description": "The operation that produced this change."
+        },
+        "nixopsVersion": {
+          "type": "string",
+          "description": "The version of NixOps that produced this event."
+        },
+        "patch": {
+          "$ref": "#/definitions/Patch",
+          "title": "JSON Patch",
+          "description": "JSON Patch operations to apply to the state."
+        }
+      },
+      "required": [
+        "resource",
+        "event",
+        "nixopsVersion",
+        "patch"
+      ]
+    },
+    "StateEventDone": {
+      "type": "object",
+      "title": "stateEvent done payload",
+      "description": "The done payload of stateEvent: nothing further."
+    },
+    "Warning": {
+      "type": "object",
+      "title": "Warning",
+      "description": "An informational warning that may appear on any result and is shown to the user (deprecations, ignored settings).",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "A stable namespaced code: <provider>.<reason> or core.<reason>; the namespaces core and protocol are reserved."
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "Rejected": {
+      "type": "object",
+      "title": "Rejected payload",
+      "description": "The operation did not take effect: invalid inputs, permission, conflict, throttled, cancelled before start. A missing code is core.unspecified; retryable defaults to false.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "A stable namespaced code: <provider>.<reason> or core.<reason>; the namespaces core and protocol are reserved."
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Re-sending this request later may succeed."
+        },
+        "message": {
+          "type": "string",
+          "description": "Display only; the engine acts on the code, never on the message."
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "LogNotificationParams": {
+      "type": "object",
+      "title": "log params",
+      "description": "A log entry attributed to a request when requestId is present; no capability needed.",
+      "properties": {
+        "requestId": {
+          "$ref": "#/definitions/Id"
+        },
+        "level": {
+          "type": "string",
+          "description": "debug, info, warn or error; an unknown level is treated as info."
+        },
+        "message": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "Log fields"
+        }
+      },
+      "required": [
+        "message"
+      ]
+    },
+    "ProgressNotificationParams": {
+      "type": "object",
+      "title": "progress params",
+      "description": "Progress on a request in flight (progress@1); resets the request's silence deadline.",
+      "properties": {
+        "requestId": {
+          "$ref": "#/definitions/Id"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "An optional completion fraction."
+        }
+      },
+      "required": [
+        "requestId",
+        "message"
+      ]
+    },
+    "CancelNotificationParams": {
+      "type": "object",
+      "title": "cancel params",
+      "description": "Cancel a request in flight (cancel@1). The request still gets its response, usually rejected with core.cancelled, or indeterminate.",
+      "properties": {
+        "requestId": {
+          "$ref": "#/definitions/Id"
+        }
+      },
+      "required": [
+        "requestId"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Request"
+    },
+    {
+      "$ref": "#/definitions/Response"
+    },
+    {
+      "$ref": "#/definitions/Notification"
+    }
+  ]
+}
